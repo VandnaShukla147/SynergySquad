@@ -15,8 +15,8 @@ export const SocketProvider = ({ children }) => {
     useEffect(() => {
         // Determine backend URL dynamically.
         // If running locally via 'npm run dev', connect to the separate backend on port 5000.
-        // If deployed to production (Render), connect to the same origin serving the React app.
-        const backendUrl = import.meta.env.PROD ? undefined : 'http://localhost:5000';
+        // If deployed to production (Render), connect to the same origin serving the React app, at the root level.
+        const backendUrl = import.meta.env.PROD ? '/' : 'http://localhost:5000';
         const newSocket = io(backendUrl);
 
         newSocket.on('server:state_update', (data) => {
