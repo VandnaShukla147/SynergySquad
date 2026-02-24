@@ -304,10 +304,14 @@ io.on('connection', (socket) => {
 
 // Health Check Endpoint
 app.get('/health', (req, res) => {
+    const uri = process.env.MONGO_URI || '';
     res.json({
         status: 'online',
         mongodb_state: mongoose.connection.readyState,
-        has_mongo_uri: !!process.env.MONGO_URI
+        has_mongo_uri: !!process.env.MONGO_URI,
+        uri_length: uri.length,
+        uri_start: uri.substring(0, 10),
+        uri_end: uri.substring(uri.length - 5)
     });
 });
 
