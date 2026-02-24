@@ -302,6 +302,15 @@ io.on('connection', (socket) => {
     });
 });
 
+// Health Check Endpoint
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'online',
+        mongodb_state: mongoose.connection.readyState,
+        has_mongo_uri: !!process.env.MONGO_URI
+    });
+});
+
 // Serve Frontend Configuration for Production Deployment
 const frontendPath = path.join(__dirname, '../frontend/dist');
 app.use(express.static(frontendPath));
