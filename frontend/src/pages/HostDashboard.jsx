@@ -16,7 +16,7 @@ const HostDashboard = () => {
     const navigate = useNavigate();
 
     useEffect(() => {
-        // Backend now handles the 60-second timeout automatically.
+        // Backend now handles the 90-second timeout automatically.
     }, []);
 
     if (!quizState || !quizState.state) return (

@@ -1,7 +1,7 @@
 import React from 'react';
 
 const Timer = ({ seconds }) => {
-    const percentage = (seconds / 60) * 100;
+    const percentage = (seconds / 90) * 100;
 
     let barColor = 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.4)]';
     let textColor = 'text-emerald-400';
@@ -18,7 +18,7 @@ const Timer = ({ seconds }) => {
         <div className="flex flex-col items-center">
             <div className={`text-5xl font-bold mb-3 font-mono ${textColor} transition-colors duration-500`}
                 style={{ fontFamily: "'Orbitron', monospace" }}>
-                00:{seconds.toString().padStart(2, '0')}
+                {String(Math.floor(seconds / 60)).padStart(2, '0')}:{String(seconds % 60).padStart(2, '0')}
             </div>
             <div className="w-full h-2.5 bg-white/10 rounded-full overflow-hidden">
                 <div

@@ -78,7 +78,7 @@ const getFullState = () => {
 
         if (quizState.status === 'active' && quizState.questionStartTime) {
             const elapsed = Math.floor((Date.now() - new Date(quizState.questionStartTime)) / 1000);
-            remainingTime = Math.max(0, 60 - elapsed);
+            remainingTime = Math.max(0, 90 - elapsed);
         }
     }
 
@@ -106,7 +106,7 @@ io.on('connection', (socket) => {
                 quizState.acceptingAnswers = false;
                 io.emit('server:state_update', getFullState());
             }
-        }, 60000);
+        }, 90000);
     };
 
     socket.on('host:start_quiz', () => {
@@ -120,7 +120,7 @@ io.on('connection', (socket) => {
         quizState.questionStartTime = new Date();
 
         io.emit('server:state_update', getFullState());
-        io.emit('server:timer_sync', 60);
+        io.emit('server:timer_sync', 90);
         startQuestionTimer(0);
     });
 
@@ -159,7 +159,7 @@ io.on('connection', (socket) => {
         quizState.questionStartTime = new Date();
 
         io.emit('server:state_update', getFullState());
-        io.emit('server:timer_sync', 60);
+        io.emit('server:timer_sync', 90);
         startQuestionTimer(nextIndex);
     });
 
