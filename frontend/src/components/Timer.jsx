@@ -1,7 +1,7 @@
 import React from 'react';
 
 const Timer = ({ seconds }) => {
-    const percentage = (seconds / 90) * 100;
+    const percentage = (seconds / 80) * 100;
 
     let barColor = 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.4)]';
     let textColor = 'text-emerald-400';
