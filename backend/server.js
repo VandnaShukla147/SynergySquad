@@ -3,13 +3,7 @@ const path = require('path');
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
-const mongoose = require('mongoose');
 const { Server } = require('socket.io');
-
-const Team = require('./models/Team');
-const Question = require('./models/Question');
-const QuizState = require('./models/QuizState');
-const Submission = require('./models/Submission');
 
 const demoQuestions = require('./utils/questions');
 const { calculateScores } = require('./utils/scoring');
@@ -23,295 +17,300 @@ const io = new Server(server, {
     cors: {
         origin: '*',
         methods: ['GET', 'POST']
+    },
+    // WebSocket-first for lowest latency; fall back to polling only if needed
+    transports: ['websocket', 'polling'],
+    // Tuned for 20+ concurrent users — faster heartbeats detect stale connections sooner
+    pingInterval: 10000,
+    pingTimeout: 5000,
+    // Allow larger payloads for image-heavy question data
+    maxHttpBufferSize: 1e7,
+    // Enable connection state recovery so clients auto-resync after brief disconnects
+    connectionStateRecovery: {
+        maxDisconnectionDuration: 2 * 60 * 1000, // 2 minutes
+        skipMiddlewares: true
     }
 });
 
 const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/synergysquad-quiz';
 
-// Database Connection & Seeding
-mongoose.connect(MONGO_URI)
-    .then(async () => {
-        console.log('Connected to MongoDB');
+// ====== IN-MEMORY DATA STORE ======
 
-        // Seed Questions
-        const count = await Question.countDocuments();
-        if (count === 0) {
-            await Question.insertMany(demoQuestions);
-            console.log('Demo questions seeded');
-        }
+// Questions — loaded from file
+const questions = [...demoQuestions];
 
-        // Seed Teams and forcibly update them with new names
-        const teamsList = [
-            { teamId: 'A', name: 'AttackOnTitans' },
-            { teamId: 'B', name: 'AlgoLooms' },
-            { teamId: 'C', name: 'Moonshine Coders' },
-            { teamId: 'D', name: 'CrossCity Coders' }
-        ];
+// Teams
+let teams = [
+    { teamId: 'A', name: 'AttackOnTitans', score: 0 },
+    { teamId: 'B', name: 'AlgoLooms', score: 0 },
+    { teamId: 'C', name: 'Moonshine Coders', score: 0 },
+    { teamId: 'D', name: 'CrossCity Coders', score: 0 }
+];
 
-        await Team.deleteMany({});
-        await Team.insertMany(teamsList);
-        console.log('Teams seeded');
+// Quiz state
+let quizState = {
+    stateId: 'global',
+    status: 'waiting',
+    currentQuestionIndex: -1,
+    acceptingAnswers: false,
+    questionStartTime: null
+};
 
-        // Initialize Global State and forcibly reset to Waiting lobby on boot
-        let state = await QuizState.findOne({ stateId: 'global' });
-        if (!state) {
-            state = new QuizState({ stateId: 'global' });
-        }
-        state.status = 'waiting';
-        state.currentQuestionIndex = -1;
-        state.acceptingAnswers = false;
-        state.questionStartTime = null;
-        await state.save();
+// Submissions (array of objects)
+let submissions = [];
 
-        // Wipe volatile data on boot for a fresh session
-        await Submission.deleteMany({});
-
-        console.log('Quiz state initialized to Waiting Lobby');
-    })
-    .catch(err => console.error('MongoDB connection error:', err));
+console.log(`Loaded ${questions.length} questions`);
+console.log('Teams initialized');
+console.log('Quiz state initialized to Waiting Lobby');
 
 
 // Helper to get full state to broadcast
-const getFullState = async () => {
-    const currentState = await QuizState.findOne({ stateId: 'global' });
-    const teams = await Team.find().sort({ teamId: 1 });
+const getFullState = () => {
+    const totalQuestions = questions.length;
 
     let currentQuestion = null;
-    let submissions = [];
+    let currentSubmissions = [];
     let remainingTime = 0;
 
-    if (currentState && currentState.currentQuestionIndex >= 0) {
-        currentQuestion = await Question.findOne({ questionId: currentState.currentQuestionIndex + 1 });
-        submissions = await Submission.find({ questionIndex: currentState.currentQuestionIndex });
+    if (quizState.currentQuestionIndex >= 0) {
+        currentQuestion = questions.find(q => q.questionId === quizState.currentQuestionIndex + 1) || null;
+        currentSubmissions = submissions.filter(s => s.questionIndex === quizState.currentQuestionIndex);
 
-        if (currentState.status === 'active' && currentState.questionStartTime) {
-            const elapsed = Math.floor((Date.now() - new Date(currentState.questionStartTime)) / 1000);
+        if (quizState.status === 'active' && quizState.questionStartTime) {
+            const elapsed = Math.floor((Date.now() - new Date(quizState.questionStartTime)) / 1000);
             remainingTime = Math.max(0, 60 - elapsed);
         }
     }
 
     return {
-        state: currentState || { status: 'waiting', currentQuestionIndex: -1 },
+        state: { ...quizState },
         question: currentQuestion,
-        teams: teams,
-        submissions: submissions,
-        remainingTime: remainingTime
+        teams: [...teams].sort((a, b) => a.teamId.localeCompare(b.teamId)),
+        submissions: currentSubmissions,
+        remainingTime: remainingTime,
+        totalQuestions: totalQuestions
     };
 };
 
 // --- Socket.IO Handlers ---
 
 io.on('connection', (socket) => {
-    console.log('Client connected:', socket.id);
+    console.log('Client connected:', socket.id, '| Transport:', socket.conn.transport.name, '| Total:', io.engine.clientsCount);
 
     // Send initial state on connection
-    getFullState().then(data => {
-        socket.emit('server:state_update', data);
-    }).catch(err => console.error("Error fetching state on connect:", err));
+    socket.emit('server:state_update', getFullState());
 
     const startQuestionTimer = (questionIndex) => {
-        setTimeout(async () => {
-            const current = await QuizState.findOne({ stateId: 'global' });
-            if (current && current.status === 'active' && current.acceptingAnswers && current.currentQuestionIndex === questionIndex) {
-                await QuizState.findOneAndUpdate({ stateId: 'global' }, { acceptingAnswers: false });
-                const stateData = await getFullState();
-                io.emit('server:state_update', stateData);
+        setTimeout(() => {
+            if (quizState.status === 'active' && quizState.acceptingAnswers && quizState.currentQuestionIndex === questionIndex) {
+                quizState.acceptingAnswers = false;
+                io.emit('server:state_update', getFullState());
             }
         }, 60000);
     };
 
-    socket.on('host:start_quiz', async () => {
+    socket.on('host:start_quiz', () => {
         // Reset everything
-        await Team.updateMany({}, { score: 0 });
-        await Submission.deleteMany({});
+        teams.forEach(t => t.score = 0);
+        submissions = [];
 
-        await QuizState.findOneAndUpdate(
-            { stateId: 'global' },
-            {
-                status: 'active',
-                currentQuestionIndex: 0,
-                acceptingAnswers: true,
-                questionStartTime: new Date()
-            }
-        );
+        quizState.status = 'active';
+        quizState.currentQuestionIndex = 0;
+        quizState.acceptingAnswers = true;
+        quizState.questionStartTime = new Date();
 
-        const data = await getFullState();
-        io.emit('server:state_update', data);
-        io.emit('server:timer_sync', 60); // 60 seconds timer
+        io.emit('server:state_update', getFullState());
+        io.emit('server:timer_sync', 60);
         startQuestionTimer(0);
     });
 
-    socket.on('host:restart_quiz', async () => {
-        // Clear all submissions and reset team scores
-        await Team.updateMany({}, { score: 0 });
-        await Submission.deleteMany({});
+    socket.on('host:restart_quiz', () => {
+        teams.forEach(t => t.score = 0);
+        submissions = [];
 
-        // Set global state back to waiting
-        await QuizState.findOneAndUpdate(
-            { stateId: 'global' },
-            {
-                status: 'waiting',
-                currentQuestionIndex: -1,
-                acceptingAnswers: false,
-                questionStartTime: null
-            }
-        );
+        quizState.status = 'waiting';
+        quizState.currentQuestionIndex = -1;
+        quizState.acceptingAnswers = false;
+        quizState.questionStartTime = null;
 
-        const data = await getFullState();
-        io.emit('server:state_update', data);
+        io.emit('server:state_update', getFullState());
         io.emit('server:timer_sync', 0);
         io.emit('server:toast', { message: 'Quiz Reset to Lobby', type: 'info' });
     });
 
-    socket.on('host:next_question', async () => {
-        const currentState = await QuizState.findOne({ stateId: 'global' });
-        const nextIndex = currentState.currentQuestionIndex + 1;
+    socket.on('host:next_question', () => {
+        const nextIndex = quizState.currentQuestionIndex + 1;
+        const totalQuestions = questions.length;
 
-        await QuizState.findOneAndUpdate(
-            { stateId: 'global' },
-            {
-                status: 'active',
-                currentQuestionIndex: nextIndex,
-                acceptingAnswers: true,
-                questionStartTime: new Date()
-            }
-        );
+        if (nextIndex >= totalQuestions) {
+            quizState.status = 'finished';
+            quizState.acceptingAnswers = false;
+            quizState.questionStartTime = null;
 
-        const data = await getFullState();
-        io.emit('server:state_update', data);
+            io.emit('server:state_update', getFullState());
+            io.emit('server:timer_sync', 0);
+            io.emit('server:toast', { message: 'Quiz Complete! Start the review to go over answers.', type: 'info' });
+            return;
+        }
+
+        quizState.status = 'active';
+        quizState.currentQuestionIndex = nextIndex;
+        quizState.acceptingAnswers = true;
+        quizState.questionStartTime = new Date();
+
+        io.emit('server:state_update', getFullState());
         io.emit('server:timer_sync', 60);
         startQuestionTimer(nextIndex);
     });
 
-    socket.on('host:reveal_answer', async () => {
-        const currentState = await QuizState.findOne({ stateId: 'global' });
-        if (currentState.status !== 'active') return;
+    socket.on('host:prev_question', () => {
+        if (quizState.currentQuestionIndex <= 0) return;
+        const prevIndex = quizState.currentQuestionIndex - 1;
+        quizState.status = 'revealed';
+        quizState.currentQuestionIndex = prevIndex;
+        quizState.acceptingAnswers = false;
+        quizState.questionStartTime = null;
 
-        // Stop accepting answers
-        await QuizState.findOneAndUpdate(
-            { stateId: 'global' },
-            { acceptingAnswers: false, status: 'revealed' }
-        );
+        io.emit('server:state_update', getFullState());
+        io.emit('server:timer_sync', 0);
+        io.emit('server:toast', { message: `Revisiting Question ${prevIndex + 1}`, type: 'info' });
+    });
 
-        // Get current question and submissions
-        const question = await Question.findOne({ questionId: currentState.currentQuestionIndex + 1 });
-        let submissions = await Submission.find({ questionIndex: currentState.currentQuestionIndex });
+    // --- Review Mode ---
+    socket.on('host:start_review', () => {
+        quizState.status = 'reviewing';
+        quizState.currentQuestionIndex = 0;
+        quizState.acceptingAnswers = false;
+        quizState.questionStartTime = null;
+
+        io.emit('server:state_update', getFullState());
+        io.emit('server:toast', { message: 'Review Mode — Question 1', type: 'info' });
+    });
+
+    socket.on('host:review_next', () => {
+        if (quizState.status !== 'reviewing') return;
+        const totalQuestions = questions.length;
+        quizState.currentQuestionIndex = Math.min(quizState.currentQuestionIndex + 1, totalQuestions - 1);
+        io.emit('server:state_update', getFullState());
+    });
+
+    socket.on('host:review_prev', () => {
+        if (quizState.status !== 'reviewing') return;
+        quizState.currentQuestionIndex = Math.max(quizState.currentQuestionIndex - 1, 0);
+        io.emit('server:state_update', getFullState());
+    });
+
+    socket.on('host:reveal_answer', () => {
+        if (quizState.status !== 'active') return;
+
+        quizState.acceptingAnswers = false;
+        quizState.status = 'revealed';
+
+        const question = questions.find(q => q.questionId === quizState.currentQuestionIndex + 1);
+        let currentSubs = submissions.filter(s => s.questionIndex === quizState.currentQuestionIndex);
 
         // Handle skipped teams
-        const allTeams = ['A', 'B', 'C', 'D'];
-        const submittedTeamIds = submissions.map(s => s.teamId);
+        const allTeamIds = ['A', 'B', 'C', 'D'];
+        const submittedTeamIds = currentSubs.map(s => s.teamId);
 
-        for (const tid of allTeams) {
+        for (const tid of allTeamIds) {
             if (!submittedTeamIds.includes(tid)) {
-                const skipSub = new Submission({
+                const skipSub = {
+                    _id: `skip_${tid}_${quizState.currentQuestionIndex}`,
                     teamId: tid,
-                    questionIndex: currentState.currentQuestionIndex,
+                    questionIndex: quizState.currentQuestionIndex,
                     answer: null,
                     lockedAt: new Date(),
                     isCorrect: false,
-                    skipped: true
-                });
-                await skipSub.save();
+                    skipped: true,
+                    pointsAwarded: 0
+                };
                 submissions.push(skipSub);
+                currentSubs.push(skipSub);
             }
         }
 
-        // Identify correct answers before passing to calculateScores
-        submissions = submissions.map(sub => {
-            if (!sub.skipped && sub.answer === question.correctAnswer) {
-                sub.isCorrect = true;
+        // Identify correct answers
+        currentSubs = currentSubs.map(sub => {
+            if (!sub.skipped) {
+                if (question.type === 'fill') {
+                    // Lenient matching for fill-in-the-blank: trim, case-insensitive, ignore trailing parentheses differences
+                    const normalize = (s) => s.trim().toLowerCase().replace(/[()\s.]/g, '');
+                    sub.isCorrect = normalize(sub.answer || '') === normalize(question.correctAnswer);
+                } else {
+                    sub.isCorrect = sub.answer === question.correctAnswer;
+                }
             }
             return sub;
         });
 
         // Score calculations
-        const scoredSubmissions = calculateScores(submissions);
+        const scoredSubmissions = calculateScores(currentSubs);
 
-        // Save points awarded and update team scores
+        // Update scores on teams
         for (const sub of scoredSubmissions) {
-            await Submission.findByIdAndUpdate(sub._id, {
-                isCorrect: sub.isCorrect,
-                pointsAwarded: sub.pointsAwarded,
-                order: sub.order,
-                skipped: sub.skipped
-            });
-
-            await Team.findOneAndUpdate(
-                { teamId: sub.teamId },
-                { $inc: { score: sub.pointsAwarded } }
-            );
+            const team = teams.find(t => t.teamId === sub.teamId);
+            if (team) {
+                team.score += (sub.pointsAwarded || 0);
+            }
         }
 
-        const finalData = await getFullState();
-        io.emit('server:state_update', finalData);
+        io.emit('server:state_update', getFullState());
         io.emit('server:toast', { message: 'Answers Revealed!', type: 'info' });
     });
 
-    socket.on('team:lock_answer', async (data) => {
-        // data: { teamId: 'A', answer: 'Hyper Text...' }
+    socket.on('team:lock_answer', (data) => {
         const { teamId, answer } = data;
-        const currentState = await QuizState.findOne({ stateId: 'global' });
 
-        if (!currentState.acceptingAnswers) return;
+        if (!quizState.acceptingAnswers) return;
 
         // Check if team already submitted
-        const existing = await Submission.findOne({
-            teamId,
-            questionIndex: currentState.currentQuestionIndex
-        });
+        const existing = submissions.find(s =>
+            s.teamId === teamId && s.questionIndex === quizState.currentQuestionIndex
+        );
+        if (existing) return;
 
-        if (existing) return; // Prevent multiple locks
-
-        const sub = new Submission({
+        const sub = {
+            _id: `sub_${teamId}_${quizState.currentQuestionIndex}_${Date.now()}`,
             teamId,
-            questionIndex: currentState.currentQuestionIndex,
+            questionIndex: quizState.currentQuestionIndex,
             answer,
-            lockedAt: new Date()
-        });
+            lockedAt: new Date(),
+            isCorrect: false,
+            skipped: false,
+            pointsAwarded: 0
+        };
 
-        await sub.save();
+        submissions.push(sub);
 
-        // Broadcast only the lock status to everyone so the host can see it live
-        const stateData = await getFullState();
-        io.emit('server:state_update', stateData);
+        io.emit('server:state_update', getFullState());
     });
 
-    // End accepting answers (usually called by timer on host)
-    socket.on('host:time_up', async () => {
-        await QuizState.findOneAndUpdate(
-            { stateId: 'global' },
-            { acceptingAnswers: false } // Status remains active until reveal is clicked
-        );
-        const stateData = await getFullState();
-        io.emit('server:state_update', stateData);
+    socket.on('host:time_up', () => {
+        quizState.acceptingAnswers = false;
+        io.emit('server:state_update', getFullState());
     });
 
-    // Manual score adjustment
-    socket.on('host:update_score', async ({ teamId, delta }) => {
-        await Team.findOneAndUpdate(
-            { teamId },
-            { $inc: { score: delta } }
-        );
-        const stateData = await getFullState();
-        io.emit('server:state_update', stateData);
+    socket.on('host:update_score', ({ teamId, delta }) => {
+        const team = teams.find(t => t.teamId === teamId);
+        if (team) {
+            team.score += delta;
+        }
+        io.emit('server:state_update', getFullState());
     });
 
-    socket.on('disconnect', () => {
-        console.log('Client disconnected:', socket.id);
+    socket.on('disconnect', (reason) => {
+        console.log('Client disconnected:', socket.id, '| Reason:', reason, '| Remaining:', io.engine.clientsCount);
     });
 });
 
 // Health Check Endpoint
 app.get('/health', (req, res) => {
-    const uri = process.env.MONGO_URI || '';
     res.json({
         status: 'online',
-        mongodb_state: mongoose.connection.readyState,
-        has_mongo_uri: !!process.env.MONGO_URI,
-        uri_length: uri.length,
-        uri_start: uri.substring(0, 10),
-        uri_end: uri.substring(uri.length - 5)
+        questions: questions.length,
+        teams: teams.length,
+        quizStatus: quizState.status
     });
 });
 

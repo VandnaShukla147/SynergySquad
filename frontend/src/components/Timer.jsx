@@ -3,18 +3,26 @@ import React from 'react';
 const Timer = ({ seconds }) => {
     const percentage = (seconds / 60) * 100;
 
-    let colorClass = 'bg-green-500';
-    if (seconds <= 20) colorClass = 'bg-yellow-500';
-    if (seconds <= 10) colorClass = 'bg-red-500';
+    let barColor = 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.4)]';
+    let textColor = 'text-emerald-400';
+    if (seconds <= 20) {
+        barColor = 'bg-yellow-500 shadow-[0_0_12px_rgba(234,179,8,0.4)]';
+        textColor = 'text-yellow-400';
+    }
+    if (seconds <= 10) {
+        barColor = 'bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.5)]';
+        textColor = 'text-red-400';
+    }
 
     return (
         <div className="flex flex-col items-center">
-            <div className="text-4xl font-bold mb-2 font-mono">
+            <div className={`text-5xl font-bold mb-3 font-mono ${textColor} transition-colors duration-500`}
+                style={{ fontFamily: "'Orbitron', monospace" }}>
                 00:{seconds.toString().padStart(2, '0')}
             </div>
-            <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
+            <div className="w-full h-2.5 bg-white/10 rounded-full overflow-hidden">
                 <div
-                    className={`h-full ${colorClass} transition-all duration-1000 ease-linear`}
+                    className={`h-full ${barColor} rounded-full transition-all duration-1000 ease-linear`}
                     style={{ width: `${percentage}%` }}
                 ></div>
             </div>

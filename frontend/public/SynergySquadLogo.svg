@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 280" fill="none">
+  <defs>
+    <linearGradient id="chrome" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="20%" stop-color="#c8deff"/>
+      <stop offset="50%" stop-color="#5b9fff"/>
+      <stop offset="80%" stop-color="#c8deff"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+    <linearGradient id="chromePurple" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="20%" stop-color="#e2c0ff"/>
+      <stop offset="50%" stop-color="#a855f7"/>
+      <stop offset="80%" stop-color="#e2c0ff"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#60a5fa"/>
+    </linearGradient>
+    <linearGradient id="purpleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#c084fc"/>
+    </linearGradient>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.25"/>
+      <stop offset="50%" stop-color="#7c3aed" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.25"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="textGlow">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="blueEnergy">
+      <feGaussianBlur stdDeviation="5"/>
+      <feFlood flood-color="#3b82f6" flood-opacity="0.8"/>
+      <feComposite in2="SourceGraphic" operator="in"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="purpleEnergy">
+      <feGaussianBlur stdDeviation="5"/>
+      <feFlood flood-color="#a855f7" flood-opacity="0.8"/>
+      <feComposite in2="SourceGraphic" operator="in"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Diamond shield outline -->
+  <polygon points="450,22 820,140 450,258 80,140" stroke="url(#blueGrad)" stroke-width="2" fill="url(#shieldGrad)" opacity="0.3"/>
+
+  <!-- Blue lightning LEFT -->
+  <g filter="url(#blueEnergy)" opacity="0.85">
+    <polyline points="55,105 110,128 70,145 130,155 80,170 135,185 90,205" stroke="#60a5fa" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="bevel"/>
+    <polyline points="35,130 90,148 55,162 110,172 65,190" stroke="#3b82f6" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    <polyline points="85,82 128,110 95,128 145,140" stroke="#93c5fd" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- Purple lightning RIGHT -->
+  <g filter="url(#purpleEnergy)" opacity="0.85">
+    <polyline points="845,105 790,128 830,145 770,155 820,170 765,185 810,205" stroke="#c084fc" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="bevel"/>
+    <polyline points="865,130 810,148 845,162 790,172 835,190" stroke="#a855f7" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    <polyline points="815,82 772,110 805,128 755,140" stroke="#d8b4fe" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- Crown/gem top center -->
+  <g filter="url(#glow)">
+    <polygon points="450,24 465,52 450,44 435,52" fill="#60a5fa"/>
+    <polygon points="450,27 460,48 450,42 440,48" fill="#93c5fd"/>
+    <circle cx="450" cy="26" r="3.5" fill="#dbeafe"/>
+  </g>
+
+  <!-- Text shadow -->
+  <text x="452" y="168" font-family="'Arial Black', 'Impact', sans-serif" font-weight="900" font-size="88" font-style="italic" fill="#0f172a" text-anchor="middle" letter-spacing="-1" opacity="0.5" dx="3" dy="3">SYNERGYSQUAD</text>
+
+  <!-- SYNERGY text (blue chrome) -->
+  <g filter="url(#textGlow)">
+    <text x="310" y="168" font-family="'Arial Black', 'Impact', sans-serif" font-weight="900" font-size="88" font-style="italic" fill="url(#chrome)" text-anchor="middle" letter-spacing="-1">SYNERGY</text>
+    <text x="310" y="168" font-family="'Arial Black', 'Impact', sans-serif" font-weight="900" font-size="88" font-style="italic" fill="none" stroke="#1e40af" stroke-width="1.2" text-anchor="middle" letter-spacing="-1" opacity="0.5">SYNERGY</text>
+  </g>
+
+  <!-- SQUAD text (purple chrome) -->
+  <g filter="url(#textGlow)">
+    <text x="635" y="168" font-family="'Arial Black', 'Impact', sans-serif" font-weight="900" font-size="88" font-style="italic" fill="url(#chromePurple)" text-anchor="middle" letter-spacing="-1">SQUAD</text>
+    <text x="635" y="168" font-family="'Arial Black', 'Impact', sans-serif" font-weight="900" font-size="88" font-style="italic" fill="none" stroke="#6b21a8" stroke-width="1.2" text-anchor="middle" letter-spacing="-1" opacity="0.5">SQUAD</text>
+  </g>
+
+  <!-- Decorative lines under text -->
+  <line x1="170" y1="190" x2="730" y2="190" stroke="url(#blueGrad)" stroke-width="1.5" opacity="0.3"/>
+
+  <!-- Sparks -->
+  <circle cx="115" cy="95" r="2.5" fill="#60a5fa" filter="url(#glow)" opacity="0.8"/>
+  <circle cx="785" cy="95" r="2.5" fill="#c084fc" filter="url(#glow)" opacity="0.8"/>
+  <circle cx="95" cy="175" r="2" fill="#3b82f6" filter="url(#glow)" opacity="0.6"/>
+  <circle cx="805" cy="175" r="2" fill="#a855f7" filter="url(#glow)" opacity="0.6"/>
+</svg>

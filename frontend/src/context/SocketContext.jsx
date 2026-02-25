@@ -17,7 +17,17 @@ export const SocketProvider = ({ children }) => {
         // If running locally via 'npm run dev', connect to the separate backend on port 5000.
         // If deployed to production (Render), connect to the same origin serving the React app, at the root level.
         const backendUrl = import.meta.env.PROD ? '/' : 'http://localhost:5000';
-        const newSocket = io(backendUrl);
+        const newSocket = io(backendUrl, {
+            // WebSocket-first for lowest latency with 20+ users
+            transports: ['websocket', 'polling'],
+            // Aggressive reconnection for seamless experience
+            reconnection: true,
+            reconnectionAttempts: Infinity,
+            reconnectionDelay: 500,
+            reconnectionDelayMax: 3000,
+            // Faster timeout detection
+            timeout: 10000
+        });
 
         newSocket.on('server:state_update', (data) => {
             setQuizState(data);

@@ -1,11 +1,12 @@
 services:
   - type: web
     name: synergysquad-live-quiz
-    env: node
+    runtime: node
     buildCommand: "cd frontend && npm install && npm run build && cd ../backend && npm install"
     startCommand: "cd backend && node server.js"
+    plan: free
     envVars:
       - key: NODE_ENV
         value: production
-      - key: MONGO_URI
-        sync: false
+      - key: PORT
+        value: 10000

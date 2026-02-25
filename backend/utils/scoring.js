@@ -20,7 +20,6 @@ const calculateScores = (submissions) => {
     });
 
     let correctRank = 1;
-    let hasWrongAnswer = false;
 
     for (const group of groups) {
         let groupCorrectRank = correctRank;
@@ -38,8 +37,8 @@ const calculateScores = (submissions) => {
                 sub.order = groupCorrectRank;
                 groupHasCorrect = true;
             } else {
-                // Wrong answer
-                sub.pointsAwarded = hasWrongAnswer ? -1 : -2;
+                // Wrong answer — always -1 regardless of sequence
+                sub.pointsAwarded = -1;
             }
             results.push(sub);
         }
@@ -47,10 +46,6 @@ const calculateScores = (submissions) => {
         if (groupHasCorrect) {
             // Increase correctRank by the number of correct submissions in this group
             correctRank += group.filter(s => s.isCorrect).length;
-        }
-
-        if (group.some(s => !s.isCorrect && !s.skipped)) {
-            hasWrongAnswer = true;
         }
     }
 
